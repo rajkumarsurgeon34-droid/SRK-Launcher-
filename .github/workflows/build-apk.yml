@@ -1,0 +1,56 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Android SDK licences
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          SM=$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager | head -1)
+          yes | "$SM" --sdk_root="$SDK" --licenses > /dev/null || true
+          echo "sdk.dir=$SDK" > local.properties
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Build APK
+        run: gradle :app:assembleRelease -PbuildNumber=${{ github.run_number }} --stacktrace
+
+      - name: Collect APK
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk SRK-Launcher.apk
+          ls -la SRK-Launcher.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SRK-Launcher-apk
+          path: SRK-Launcher.apk
+
+      - name: Publish download (Releases)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: SRK Launcher build ${{ github.run_number }}
+          body: |
+            Install SRK-Launcher.apk on your Android phone, open it, and set it as your Home app.
+          files: SRK-Launcher.apk

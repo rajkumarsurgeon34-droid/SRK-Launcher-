@@ -1,0 +1,47 @@
+plugins {
+    id 'com.android.application'
+}
+
+def buildNumber = (project.findProperty('buildNumber') ?: '1').toString().toInteger()
+
+android {
+    namespace 'in.shazverse.srklauncher'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'in.shazverse.srklauncher'
+        minSdk 26
+        targetSdk 35
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
+    }
+
+    signingConfigs {
+        srk {
+            storeFile rootProject.file('signing/srk-launcher.keystore')
+            storePassword 'srklauncher'
+            keyAlias 'srk'
+            keyPassword 'srklauncher'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.srk
+        }
+        debug {
+            signingConfig signingConfigs.srk
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
