@@ -24,7 +24,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Installed apps plus the saved Home Screen / Dock layout. */
+/**
+ * Installed apps plus the saved Home Screen layout.
+ * Home entries are strings: an app key ("pkg/.Activity"), "folder:ID" or "widget:KIND:WxH:ID".
+ */
 final class AppStore {
     static final int DOCK_MAX = 4;
 
@@ -38,11 +41,64 @@ final class AppStore {
         }
     }
 
+    /** A folder on the Home Screen. */
+    static final class HomeFolder {
+        final String id;
+        String name;
+        final ArrayList<String> items = new ArrayList<>();
+
+        HomeFolder(String id, String name) {
+            this.id = id;
+            this.name = name;
+        }
+    }
+
+    /** A widget placed on the Home Screen. */
+    static final class WidgetSpec {
+        final String kind; // weather, clock, calendar, battery, sys
+        final int w, h;
+        final int id;
+
+        WidgetSpec(String kind, int w, int h, int id) {
+            this.kind = kind;
+            this.w = w;
+            this.h = h;
+            this.id = id;
+        }
+
+        String entry() {
+            return "widget:" + kind + ":" + w + "x" + h + ":" + id;
+        }
+
+        static WidgetSpec parse(String e) {
+            try {
+                String[] p = e.split(":");
+                String[] wh = p[2].split("x");
+                return new WidgetSpec(p[1], Integer.parseInt(wh[0]), Integer.parseInt(wh[1]), Integer.parseInt(p[3]));
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+    }
+
+    static boolean isFolder(String e) {
+        return e.startsWith("folder:");
+    }
+
+    static boolean isWidget(String e) {
+        return e.startsWith("widget:");
+    }
+
+    static boolean isApp(String e) {
+        return !isFolder(e) && !isWidget(e);
+    }
+
     final Context ctx;
     final SharedPreferences prefs;
     Map<String, AppInfo> apps = new LinkedHashMap<>();
     final ArrayList<String> home = new ArrayList<>();
     final ArrayList<String> dock = new ArrayList<>();
+    final LinkedHashMap<String, HomeFolder> folders = new LinkedHashMap<>();
 
     AppStore(Context c) {
         ctx = c.getApplicationContext();
@@ -87,6 +143,10 @@ final class AppStore {
         return map;
     }
 
+    private static int newId() {
+        return (int) (Math.random() * 1_000_000_000) + 1;
+    }
+
     /** Main thread: install a fresh app list and reconcile the saved layout. */
     void apply(Map<String, AppInfo> loaded) {
         apps = loaded;
@@ -94,35 +154,83 @@ final class AppStore {
         Set<String> known = new HashSet<>(prefs.getStringSet("known", new HashSet<>()));
         home.clear();
         dock.clear();
+        folders.clear();
         if (first) {
             for (Intent i : defaultDockIntents()) {
                 String k = keyFor(i);
                 if (k != null && !dock.contains(k) && dock.size() < DOCK_MAX) dock.add(k);
             }
+            home.add(new WidgetSpec("weather", 4, 2, newId()).entry());
             for (String k : apps.keySet()) if (!dock.contains(k)) home.add(k);
+            prefs.edit().putBoolean("v2", true).apply();
         } else {
-            LinkedHashSet<String> h = new LinkedHashSet<>(split(prefs.getString("home", "")));
-            LinkedHashSet<String> d = new LinkedHashSet<>(split(prefs.getString("dock", "")));
-            for (String k : d) if (apps.containsKey(k) && dock.size() < DOCK_MAX) dock.add(k);
-            for (String k : h) if (apps.containsKey(k) && !dock.contains(k)) home.add(k);
+            for (String id : split(prefs.getString("folders", ""))) {
+                HomeFolder f = new HomeFolder(id, prefs.getString("fname:" + id, "Folder"));
+                for (String k : split(prefs.getString("fitems:" + id, ""))) {
+                    if (apps.containsKey(k) && !f.items.contains(k)) f.items.add(k);
+                }
+                folders.put(id, f);
+            }
+            Set<String> inFolders = new HashSet<>();
+            for (HomeFolder f : folders.values()) inFolders.addAll(f.items);
+
+            for (String k : new LinkedHashSet<>(split(prefs.getString("dock", "")))) {
+                if (apps.containsKey(k) && dock.size() < DOCK_MAX && !inFolders.contains(k)) dock.add(k);
+            }
+            boolean hasWidget = false;
+            for (String e : new LinkedHashSet<>(split(prefs.getString("home", "")))) {
+                if (isWidget(e)) {
+                    if (WidgetSpec.parse(e) != null) {
+                        home.add(e);
+                        hasWidget = true;
+                    }
+                } else if (isFolder(e)) {
+                    HomeFolder f = folders.get(e.substring(7));
+                    if (f == null || f.items.isEmpty()) continue;
+                    if (f.items.size() == 1) {
+                        home.add(f.items.get(0));
+                        folders.remove(f.id);
+                    } else {
+                        home.add(e);
+                    }
+                } else if (apps.containsKey(e) && !dock.contains(e) && !inFolders.contains(e)) {
+                    home.add(e);
+                }
+            }
+            // drop folders that are no longer on the Home Screen
+            ArrayList<String> orphan = new ArrayList<>();
+            for (String id : folders.keySet()) if (!home.contains("folder:" + id)) orphan.add(id);
+            for (String id : orphan) folders.remove(id);
+
+            if (!prefs.getBoolean("v2", false)) {
+                if (!hasWidget) home.add(0, new WidgetSpec("weather", 4, 2, newId()).entry());
+                prefs.edit().putBoolean("v2", true).apply();
+            }
+            Set<String> placed = new HashSet<>(home);
+            placed.addAll(dock);
+            for (HomeFolder f : folders.values()) placed.addAll(f.items);
             // Newly installed apps go to the end of the Home Screen, like iOS.
             for (String k : apps.keySet()) {
-                if (!known.contains(k) && !home.contains(k) && !dock.contains(k)) home.add(k);
+                if (!known.contains(k) && !placed.contains(k)) home.add(k);
             }
         }
         save();
     }
 
     void save() {
-        prefs.edit()
+        SharedPreferences.Editor e = prefs.edit()
                 .putString("home", join(home))
                 .putString("dock", join(dock))
                 .putStringSet("known", new HashSet<>(apps.keySet()))
-                .apply();
+                .putString("folders", join(new ArrayList<>(folders.keySet())));
+        for (HomeFolder f : folders.values()) {
+            e.putString("fname:" + f.id, f.name).putString("fitems:" + f.id, join(f.items));
+        }
+        e.apply();
     }
 
     void resetLayout() {
-        prefs.edit().remove("home").remove("dock").remove("known").apply();
+        prefs.edit().remove("home").remove("dock").remove("known").remove("folders").apply();
         apply(apps);
     }
 
@@ -159,14 +267,15 @@ final class AppStore {
 
     // ---- layout edits ----
 
-    /** Moves an app to a final position in the Home Screen list or the Dock. */
-    void move(String key, boolean toDock, int index) {
-        boolean fromDock = dock.contains(key);
-        int src = fromDock ? dock.indexOf(key) : home.indexOf(key);
+    /** Moves an entry to a final position in the Home Screen list or (apps only) the Dock. */
+    void move(String entry, boolean toDock, int index) {
+        if (toDock && !isApp(entry)) return;
+        boolean fromDock = dock.contains(entry);
+        int src = fromDock ? dock.indexOf(entry) : home.indexOf(entry);
         if (toDock && !fromDock && dock.size() >= DOCK_MAX) {
             int di = Math.max(0, Math.min(index, dock.size() - 1));
             String out = dock.get(di);
-            dock.set(di, key);
+            dock.set(di, entry);
             if (src >= 0) home.set(src, out); else home.add(out);
             save();
             return;
@@ -175,18 +284,19 @@ final class AppStore {
         ArrayList<String> to = toDock ? dock : home;
         if (src >= 0) from.remove(src);
         index = Math.max(0, Math.min(index, to.size()));
-        to.add(index, key);
+        to.add(index, entry);
         save();
     }
 
-    void removeFromHome(String key) {
-        home.remove(key);
-        dock.remove(key);
+    void removeEntry(String entry) {
+        home.remove(entry);
+        dock.remove(entry);
+        if (isFolder(entry)) folders.remove(entry.substring(7));
         save();
     }
 
     void addToHome(String key) {
-        if (!home.contains(key) && !dock.contains(key)) home.add(key);
+        if (!home.contains(key) && !dock.contains(key) && folderOf(key) == null) home.add(key);
         save();
     }
 
@@ -200,6 +310,106 @@ final class AppStore {
     void removeFromDock(String key) {
         if (dock.remove(key) && !home.contains(key)) home.add(key);
         save();
+    }
+
+    // ---- folders ----
+
+    HomeFolder folderOf(String key) {
+        for (HomeFolder f : folders.values()) if (f.items.contains(key)) return f;
+        return null;
+    }
+
+    /** Drop app {@code dragged} onto app {@code target}: make a folder named after the category. */
+    String createFolder(String target, String dragged) {
+        int idx = home.indexOf(target);
+        if (idx < 0 || target.equals(dragged)) return null;
+        AppInfo t = apps.get(target);
+        String name = t == null ? "Folder" : Categories.NAMES[t.category].split(" & ")[0];
+        if ("Other".equals(name)) name = "Folder";
+        String id = String.valueOf(newId());
+        HomeFolder f = new HomeFolder(id, name);
+        f.items.add(target);
+        f.items.add(dragged);
+        home.set(idx, "folder:" + id);
+        home.remove(dragged);
+        dock.remove(dragged);
+        folders.put(id, f);
+        save();
+        return id;
+    }
+
+    void addToFolder(String folderId, String key) {
+        HomeFolder f = folders.get(folderId);
+        if (f == null || f.items.contains(key)) return;
+        home.remove(key);
+        dock.remove(key);
+        f.items.add(key);
+        save();
+    }
+
+    /** Takes an app out of a folder; a folder left with one app dissolves, like iOS. */
+    void removeFromFolder(String folderId, String key) {
+        HomeFolder f = folders.get(folderId);
+        if (f == null) return;
+        f.items.remove(key);
+        int idx = home.indexOf("folder:" + folderId);
+        if (f.items.size() <= 1) {
+            folders.remove(folderId);
+            if (idx >= 0) {
+                if (f.items.size() == 1) home.set(idx, f.items.get(0));
+                else home.remove(idx);
+            }
+            idx = home.indexOf(f.items.isEmpty() ? key : f.items.get(0));
+        }
+        home.add(idx >= 0 ? Math.min(idx + 1, home.size()) : home.size(), key);
+        save();
+    }
+
+    /** Moves every app out of a folder onto the Home Screen. */
+    void dissolveFolder(String folderId) {
+        HomeFolder f = folders.remove(folderId);
+        if (f == null) return;
+        int idx = home.indexOf("folder:" + folderId);
+        if (idx < 0) idx = home.size(); else home.remove(idx);
+        home.addAll(Math.min(idx, home.size()), f.items);
+        save();
+    }
+
+    void renameFolder(String folderId, String name) {
+        HomeFolder f = folders.get(folderId);
+        if (f == null) return;
+        f.name = name.trim().isEmpty() ? "Folder" : name.trim();
+        save();
+    }
+
+    List<AppInfo> folderApps(String folderId) {
+        ArrayList<AppInfo> l = new ArrayList<>();
+        HomeFolder f = folders.get(folderId);
+        if (f == null) return l;
+        for (String k : f.items) {
+            AppInfo a = apps.get(k);
+            if (a != null) l.add(a);
+        }
+        return l;
+    }
+
+    // ---- widgets ----
+
+    String addWidget(String kind, int w, int h, int id, int index) {
+        String e = new WidgetSpec(kind, w, h, id == 0 ? newId() : id).entry();
+        home.add(Math.max(0, Math.min(index, home.size())), e);
+        save();
+        return e;
+    }
+
+    String resizeWidget(String entry, int w, int h) {
+        WidgetSpec s = WidgetSpec.parse(entry);
+        int idx = home.indexOf(entry);
+        if (s == null || idx < 0) return entry;
+        String e = new WidgetSpec(s.kind, w, h, s.id).entry();
+        home.set(idx, e);
+        save();
+        return e;
     }
 
     // ---- usage, suggestions, library ----
@@ -242,7 +452,7 @@ final class AppStore {
         return new ArrayList<>(l.subList(0, Math.min(n, l.size())));
     }
 
-    List<Folder> folders() {
+    List<Folder> libraryFolders() {
         ArrayList<Folder> out = new ArrayList<>();
         List<AppInfo> sug = suggestions(8);
         if (!sug.isEmpty()) out.add(new Folder("Suggestions", sug));
@@ -285,14 +495,14 @@ final class AppStore {
         return false;
     }
 
-    private static List<String> split(String s) {
+    static List<String> split(String s) {
         ArrayList<String> l = new ArrayList<>();
         if (s == null || s.isEmpty()) return l;
         for (String p : s.split("\\|")) if (!p.isEmpty()) l.add(p);
         return l;
     }
 
-    private static String join(List<String> l) {
+    static String join(List<String> l) {
         StringBuilder b = new StringBuilder();
         for (String s : l) {
             if (b.length() > 0) b.append('|');

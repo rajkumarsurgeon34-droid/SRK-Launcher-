@@ -24,10 +24,13 @@ final class Ui {
 
     static DisplayMetrics dm;
 
-    static final Typeface REGULAR = Typeface.create("sans-serif", Typeface.NORMAL);
-    static final Typeface MEDIUM = Typeface.create("sans-serif-medium", Typeface.NORMAL);
-    static final Typeface BOLD = Typeface.create("sans-serif", Typeface.BOLD);
-    static final Typeface LIGHT = Typeface.create("sans-serif-light", Typeface.NORMAL);
+    static Typeface REGULAR = Typeface.create("sans-serif", Typeface.NORMAL);
+    static Typeface MEDIUM = Typeface.create("sans-serif-medium", Typeface.NORMAL);
+    static Typeface SEMIBOLD = Typeface.create("sans-serif-medium", Typeface.NORMAL);
+    static Typeface BOLD = Typeface.create("sans-serif", Typeface.BOLD);
+    static Typeface LIGHT = Typeface.create("sans-serif-light", Typeface.NORMAL);
+    static Typeface THIN = Typeface.create("sans-serif-thin", Typeface.NORMAL);
+    private static boolean fontsLoaded;
 
     static final int WHITE = 0xFFFFFFFF;
     static final int BLUE = 0xFF0A84FF;
@@ -38,11 +41,22 @@ final class Ui {
     static final int YELLOW = 0xFFFFD60A;
     static final int GREY = 0xFF8E8E93;
     static final int CARD = 0xD91C1C1E;
-    static final int TILE = 0x99303034;
+    static final int TILE = 0x3DFFFFFF;
     static final int FILL = 0x52787880;
 
     static void init(Context c) {
         dm = c.getResources().getDisplayMetrics();
+        if (fontsLoaded) return;
+        try {
+            REGULAR = Typeface.createFromAsset(c.getAssets(), "fonts/Inter_400Regular.ttf");
+            MEDIUM = Typeface.createFromAsset(c.getAssets(), "fonts/Inter_500Medium.ttf");
+            SEMIBOLD = Typeface.createFromAsset(c.getAssets(), "fonts/Inter_600SemiBold.ttf");
+            BOLD = Typeface.createFromAsset(c.getAssets(), "fonts/Inter_700Bold.ttf");
+            LIGHT = Typeface.createFromAsset(c.getAssets(), "fonts/Inter_300Light.ttf");
+            THIN = Typeface.createFromAsset(c.getAssets(), "fonts/Inter_200ExtraLight.ttf");
+            fontsLoaded = true;
+        } catch (Exception ignored) {
+        }
     }
 
     static int dp(float v) {

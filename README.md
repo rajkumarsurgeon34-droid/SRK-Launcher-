@@ -3,6 +3,11 @@
 An iOS-style home screen for Android, part of the SRK family by ShazVerse Technologies.
 
 ## Features
+- **Real frosted glass** – built-in iOS-style wallpapers (or your own photo) with blurred glass Dock, folders and panels; Inter font
+- **Home Screen folders** – in edit mode drag an app onto another app; tap the name to rename
+- **Placeable widgets** – SRK widgets and your phone's own widgets in Small / Medium / Large, from the **+** button
+- **Smooth animations** – spring folders, Control Centre and sheets, zoom back to Home, icon press
+- **Notification Centre** – lock-screen style clock and date (swipe down from top-left)
 - **Home Screen + Dock** – squircle icons, swipeable pages with page dots, frosted 4-app Dock
 - **Edit mode** – long-press empty space: icons jiggle, drag to rearrange (drag to screen edge to change page, drop on Dock), tap ⊖ to remove
 - **App Library** – swipe past the last page: auto-sorted folders (Suggestions, Recently Added, Social, Productivity, Education, Finance…), search and A–Z list

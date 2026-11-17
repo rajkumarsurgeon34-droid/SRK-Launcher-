@@ -38,6 +38,8 @@ final class AppLibraryPage extends FrameLayout {
         LinearLayout bar = new LinearLayout(a);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         search = Ui.searchField(a, "App Library");
+        search.setBackground(new Glass.GlassDrawable(search, Ui.dp(12), 0x2EFFFFFF, Ui.FILL));
+        a.registerGlass(search);
         bar.addView(search, new LinearLayout.LayoutParams(0, Ui.dp(44), 1));
         cancel = Ui.text(a, "Cancel", 17, Ui.WHITE, Ui.REGULAR);
         cancel.setPadding(Ui.dp(14), Ui.dp(8), Ui.dp(2), Ui.dp(8));
@@ -140,7 +142,7 @@ final class AppLibraryPage extends FrameLayout {
         int gap = Ui.dp(20);
         int width = act.lastW - Ui.dp(20) * 2;
         int card = (width - gap) / 2;
-        List<AppStore.Folder> fs = act.store.folders();
+        List<AppStore.Folder> fs = act.store.libraryFolders();
         for (int i = 0; i < fs.size(); i += 2) {
             LinearLayout row = new LinearLayout(getContext());
             row.setOrientation(LinearLayout.HORIZONTAL);

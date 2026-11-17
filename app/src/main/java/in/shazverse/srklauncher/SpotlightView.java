@@ -14,7 +14,8 @@ import android.widget.TextView;
 import java.util.List;
 
 /** Swipe-down search (Spotlight): suggestions, app results and web search. */
-final class SpotlightView extends LinearLayout {
+final class SpotlightView extends LinearLayout implements Motion.OverlayAnim {
+    private View bar;
     private final LauncherActivity act;
     private final EditText search;
     private final View suggestTitle, suggestRow;
@@ -25,7 +26,7 @@ final class SpotlightView extends LinearLayout {
         super(a);
         act = a;
         setOrientation(VERTICAL);
-        setBackgroundColor(0x8C000000);
+        setBackgroundColor(0x59000000);
         setClickable(true);
         setPadding(Ui.dp(16), a.insetTop + Ui.dp(12), Ui.dp(16), 0);
         setOnClickListener(v -> a.closeOverlay());
@@ -33,12 +34,14 @@ final class SpotlightView extends LinearLayout {
         LinearLayout bar = new LinearLayout(a);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         search = Ui.searchField(a, "Search");
+        search.setBackground(Ui.round(0x33FFFFFF, 14));
         bar.addView(search, new LayoutParams(0, Ui.dp(44), 1));
         TextView cancel = Ui.text(a, "Cancel", 17, Ui.WHITE, Ui.REGULAR);
         cancel.setPadding(Ui.dp(14), Ui.dp(8), Ui.dp(4), Ui.dp(8));
         cancel.setOnClickListener(v -> a.closeOverlay());
         bar.addView(cancel, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(bar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        this.bar = bar;
 
         TextView st = Ui.text(a, "Suggestions", 14, 0xCCFFFFFF, Ui.MEDIUM);
         st.setPadding(Ui.dp(4), Ui.dp(22), 0, Ui.dp(8));
@@ -46,7 +49,7 @@ final class SpotlightView extends LinearLayout {
         addView(st);
 
         LinearLayout row = new LinearLayout(a);
-        row.setBackground(Ui.round(0x33FFFFFF, 22));
+        row.setBackground(Ui.round(0x2EFFFFFF, 24));
         row.setPadding(Ui.dp(6), Ui.dp(10), Ui.dp(6), Ui.dp(6));
         row.setClickable(true);
         List<AppInfo> sug = a.store.suggestions(4);
@@ -92,6 +95,23 @@ final class SpotlightView extends LinearLayout {
             search.requestFocus();
             act.showKeyboard(search);
         });
+    }
+
+    @Override
+    public void enter() {
+        setAlpha(0f);
+        animate().alpha(1f).setDuration(200).start();
+        bar.setTranslationY(-Ui.dp(40));
+        bar.animate().translationY(0).setInterpolator(Motion.SPRING).setDuration(480).start();
+        suggestRow.setScaleX(0.94f);
+        suggestRow.setScaleY(0.94f);
+        suggestRow.animate().scaleX(1f).scaleY(1f).setInterpolator(Motion.SPRING).setStartDelay(60).setDuration(480).start();
+    }
+
+    @Override
+    public void exit(Runnable done) {
+        bar.animate().translationY(-Ui.dp(30)).setDuration(180).start();
+        animate().alpha(0f).setDuration(200).withEndAction(done).start();
     }
 
     private void filter(String q) {

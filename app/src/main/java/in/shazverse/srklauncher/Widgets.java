@@ -48,7 +48,8 @@ final class Widgets {
 
         void drawCard(Canvas c) {
             box.set(0, 0, getWidth(), getHeight());
-            c.drawRoundRect(box, radius, radius, bg);
+            if (bg.getShader() == null) Glass.drawRound(c, this, box, radius, 0xB31C1C1E, Ui.CARD);
+            else c.drawRoundRect(box, radius, radius, bg);
         }
 
         @Override
@@ -282,6 +283,10 @@ final class Widgets {
             drawCard(c);
             float pad = Ui.dp(16);
             float h = getHeight();
+            if (getWidth() < h * 1.5f) {
+                drawCompact(c, pad);
+                return;
+            }
             float r = (h - pad * 2) / 2f * 0.82f;
             float cx = pad + r + Ui.dp(4), cy = h / 2f;
             float sw = r * 0.2f;
@@ -303,6 +308,25 @@ final class Widgets {
             c.drawText(level >= 0 ? level + "%" : "–", tx, y, big);
             y += big.descent() - sub.ascent();
             c.drawText(fit(charging ? "Charging" : "On battery", sub, tw), tx, y, sub);
+        }
+
+        private void drawCompact(Canvas c, float pad) {
+            float w = getWidth(), h = getHeight();
+            float r = Math.min(w, h - pad * 2 - Ui.dp(20)) / 2f * 0.8f;
+            float cx = w / 2f, cy = pad + r + Ui.dp(4);
+            float sw = r * 0.16f;
+            track.setStrokeWidth(sw);
+            arc.setStrokeWidth(sw);
+            arc.setColor(level >= 0 && level <= 20 && !charging ? Ui.RED : Ui.GREEN);
+            oval.set(cx - r, cy - r, cx + r, cy + r);
+            c.drawCircle(cx, cy, r, track);
+            if (level > 0) c.drawArc(oval, -90, 360f * level / 100f, false, arc);
+            pct.setTextSize(r * 0.42f);
+            String center = level >= 0 ? level + "%" : "–";
+            c.drawText(center, cx, cy - (pct.ascent() + pct.descent()) / 2f, pct);
+            sub.setTextAlign(Paint.Align.CENTER);
+            c.drawText(charging ? "Charging" : "Phone", cx, h - pad, sub);
+            sub.setTextAlign(Paint.Align.LEFT);
         }
     }
 

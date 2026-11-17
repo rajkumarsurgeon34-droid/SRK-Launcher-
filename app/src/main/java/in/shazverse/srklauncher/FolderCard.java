@@ -24,6 +24,7 @@ final class FolderCard extends View {
         dim.setColor(0x40000000);
         setClickable(true);
         setContentDescription(f.name);
+        a.registerGlass(this);
     }
 
     private boolean miniGrid() {
@@ -51,7 +52,7 @@ final class FolderCard extends View {
     protected void onDraw(Canvas c) {
         float w = getWidth();
         r.set(0, 0, w, getHeight());
-        c.drawRoundRect(r, w * 0.2f, w * 0.2f, bg);
+        Glass.drawRound(c, this, r, w * 0.2f, 0x26FFFFFF, 0x38FFFFFF);
         int n = folder.apps.size();
         for (int i = 0; i < 4; i++) {
             cellRect(i, cell);
@@ -89,7 +90,7 @@ final class FolderCard extends View {
                     if (c >= 0 && (c < 3 || !miniGrid())) {
                         if (c < n) act.launch(folder.apps.get(c), this);
                     } else {
-                        act.showFolder(folder);
+                        act.showFolder(folder, this);
                     }
                 }
                 downCell = -1;

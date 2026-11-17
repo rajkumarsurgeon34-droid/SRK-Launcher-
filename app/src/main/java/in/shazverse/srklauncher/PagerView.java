@@ -38,7 +38,7 @@ public class PagerView extends ViewGroup {
 
     public PagerView(Context c) {
         super(c);
-        scroller = new OverScroller(c, new DecelerateInterpolator(2.2f));
+        scroller = new OverScroller(c, Motion.EASE_OUT);
         ViewConfiguration vc = ViewConfiguration.get(c);
         slop = vc.getScaledTouchSlop();
         minFling = vc.getScaledMinimumFlingVelocity() * 6;
@@ -94,7 +94,7 @@ public class PagerView extends ViewGroup {
             scrollTo(p * w, 0);
         } else {
             int dx = p * w - getScrollX();
-            int dur = Math.min(420, 220 + (int) (Math.abs(dx) * 0.25f / getResources().getDisplayMetrics().density));
+            int dur = Math.min(520, 320 + (int) (Math.abs(dx) * 0.25f / getResources().getDisplayMetrics().density));
             scroller.startScroll(getScrollX(), 0, dx, 0, dur);
             postInvalidateOnAnimation();
         }

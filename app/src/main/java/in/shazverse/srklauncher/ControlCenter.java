@@ -40,7 +40,8 @@ import android.widget.TextView;
 import java.util.List;
 
 /** iOS-style Control Centre: connectivity, media, toggles, brightness and volume sliders, shortcuts. */
-final class ControlCenter extends FrameLayout {
+final class ControlCenter extends FrameLayout implements Motion.OverlayAnim {
+    private LinearLayout content;
     private final LauncherActivity act;
     private final CircleButton airplane, cellular, wifi, bluetooth;
     private final TileButton rotation, dnd, mirror, torch, timer, calc, camera;
@@ -54,7 +55,7 @@ final class ControlCenter extends FrameLayout {
     ControlCenter(LauncherActivity a) {
         super(a);
         act = a;
-        setBackgroundColor(0xA6000000);
+        setBackgroundColor(0x66000000);
         setClickable(true);
         setOnClickListener(v -> a.closeOverlay());
 
@@ -135,9 +136,30 @@ final class ControlCenter extends FrameLayout {
         hint.setPadding(0, Ui.dp(18), 0, 0);
         wrap.addView(hint, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(wrap, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        content = wrap;
 
         wire();
         refresh();
+    }
+
+    @Override
+    public void enter() {
+        setAlpha(0f);
+        animate().alpha(1f).setDuration(200).start();
+        content.setPivotX(act.lastW * 0.85f);
+        content.setPivotY(0);
+        content.setScaleX(0.9f);
+        content.setScaleY(0.9f);
+        content.setTranslationY(-Ui.dp(40));
+        content.animate().scaleX(1f).scaleY(1f).translationY(0)
+                .setInterpolator(Motion.SPRING).setDuration(520).start();
+    }
+
+    @Override
+    public void exit(Runnable done) {
+        content.animate().scaleX(0.92f).scaleY(0.92f).translationY(-Ui.dp(50))
+                .setInterpolator(Motion.EASE_IN).setDuration(200).start();
+        animate().alpha(0f).setDuration(220).withEndAction(done).start();
     }
 
     private ImageView mediaButton(int res) {

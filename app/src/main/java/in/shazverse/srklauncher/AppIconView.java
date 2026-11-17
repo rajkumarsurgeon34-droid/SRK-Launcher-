@@ -11,6 +11,8 @@ import android.view.MotionEvent;
 import android.view.ViewConfiguration;
 import android.view.View;
 
+import java.util.List;
+
 /** An app icon with label, notification badge and iOS-style "jiggle" edit mode. */
 public class AppIconView extends View {
 
@@ -24,9 +26,15 @@ public class AppIconView extends View {
         void onIconStartDrag(AppIconView v);
     }
 
-    static final String HOME = "home", DOCK = "dock", OTHER = "other";
+    static final String HOME = "home", DOCK = "dock", OTHER = "other", IN_FOLDER = "folder";
 
+    /** The app, or null when this icon is a Home Screen folder. */
     final AppInfo app;
+    final String folderId;
+    final List<AppInfo> folderApps;
+    final String label;
+    /** For icons shown inside an open folder: the folder they belong to. */
+    String ownerFolder;
     final int iconSize;
     final boolean showLabel;
     final Callbacks cb;
@@ -36,7 +44,7 @@ public class AppIconView extends View {
     private boolean editing;
     private int badge;
     private final Paint bmp = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
-    private final TextPaint label;
+    private final TextPaint labelPaint;
     private final Paint badgeBg = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint badgeText;
     private final Paint minusBg = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -51,14 +59,27 @@ public class AppIconView extends View {
     private int shortLabelW = -1;
 
     AppIconView(Context c, AppInfo app, int iconSize, boolean showLabel, Callbacks cb) {
+        this(c, app, null, null, app.label, iconSize, showLabel, cb);
+    }
+
+    /** A Home Screen folder icon. */
+    AppIconView(Context c, String folderId, String name, List<AppInfo> apps, int iconSize, Callbacks cb) {
+        this(c, null, folderId, apps, name, iconSize, true, cb);
+    }
+
+    private AppIconView(Context c, AppInfo app, String folderId, List<AppInfo> folderApps, String label,
+                        int iconSize, boolean showLabel, Callbacks cb) {
         super(c);
         this.app = app;
+        this.folderId = folderId;
+        this.folderApps = folderApps;
+        this.label = label;
         this.iconSize = iconSize;
         this.showLabel = showLabel;
         this.cb = cb;
-        label = Ui.paint(Ui.WHITE, 12, Ui.REGULAR);
-        label.setTextAlign(Paint.Align.CENTER);
-        label.setShadowLayer(Ui.dp(2), 0, Ui.dp(1), 0x99000000);
+        labelPaint = Ui.paint(Ui.WHITE, 11.5f, Ui.REGULAR);
+        labelPaint.setTextAlign(Paint.Align.CENTER);
+        labelPaint.setShadowLayer(Ui.dp(2), 0, Ui.dp(0.5f), 0x80000000);
         badgeBg.setColor(Ui.RED);
         badgeText = Ui.paint(Ui.WHITE, 12, Ui.MEDIUM);
         badgeText.setTextAlign(Paint.Align.CENTER);
@@ -71,11 +92,20 @@ public class AppIconView extends View {
         setClickable(true);
         setLongClickable(true);
         setHapticFeedbackEnabled(true);
-        setContentDescription(app.label);
+        setContentDescription(label);
         setOnClickListener(v -> {
             if (!editing) cb.onIconClick(this);
         });
         setOnLongClickListener(v -> !editing && cb.onIconLongClick(this));
+    }
+
+    boolean isFolder() {
+        return folderId != null;
+    }
+
+    /** The Home Screen entry string this icon represents. */
+    String entry() {
+        return folderId != null ? "folder:" + folderId : app.key;
     }
 
     boolean removable() {
@@ -123,30 +153,51 @@ public class AppIconView extends View {
         setMeasuredDimension(w, h);
     }
 
+    private boolean wasPressed;
+
     @Override
     protected void drawableStateChanged() {
         super.drawableStateChanged();
+        boolean p = isPressed() && !editing;
+        if (p != wasPressed) {
+            wasPressed = p;
+            animate().scaleX(p ? 0.9f : 1f).scaleY(p ? 0.9f : 1f)
+                    .setInterpolator(p ? Motion.EASE_OUT : Motion.SPRING).setDuration(p ? 120 : 380).start();
+        }
         invalidate();
     }
 
     @Override
     protected void onDraw(Canvas c) {
         int w = getWidth(), h = getHeight();
-        float contentH = iconSize + (showLabel ? Ui.dp(6) + label.getTextSize() : 0);
+        float contentH = iconSize + (showLabel ? Ui.dp(6) + labelPaint.getTextSize() : 0);
         float top = Math.max(Ui.dp(2), (h - contentH) / 2f);
         float left = (w - iconSize) / 2f;
         iconRect.set(left, top, left + iconSize, top + iconSize);
         float r = iconSize * 0.225f;
-        if (app.icon != null) c.drawBitmap(app.icon, null, iconRect, bmp);
+        if (folderId != null) {
+            Glass.drawRound(c, this, iconRect, r, 0x40FFFFFF, 0x66FFFFFF);
+            float pad = iconSize * 0.12f, g = iconSize * 0.06f;
+            float m = (iconSize - pad * 2 - g * 2) / 3f;
+            for (int i = 0; i < 9 && folderApps != null && i < folderApps.size(); i++) {
+                AppInfo a = folderApps.get(i);
+                if (a.icon == null) continue;
+                float l = iconRect.left + pad + (i % 3) * (m + g), t = iconRect.top + pad + (i / 3) * (m + g);
+                tmp.set(l, t, l + m, t + m);
+                c.drawBitmap(a.icon, null, tmp, bmp);
+            }
+        } else if (app.icon != null) {
+            c.drawBitmap(app.icon, null, iconRect, bmp);
+        }
         if (isPressed() && !editing) c.drawRoundRect(iconRect, r, r, dim);
 
         if (showLabel) {
             int avail = w - Ui.dp(2);
             if (avail != shortLabelW) {
-                shortLabel = TextUtils.ellipsize(app.label, label, avail, TextUtils.TruncateAt.END).toString();
+                shortLabel = TextUtils.ellipsize(this.label, labelPaint, avail, TextUtils.TruncateAt.END).toString();
                 shortLabelW = avail;
             }
-            c.drawText(shortLabel, w / 2f, iconRect.bottom + Ui.dp(5) - label.ascent(), label);
+            c.drawText(shortLabel, w / 2f, iconRect.bottom + Ui.dp(5) - labelPaint.ascent(), labelPaint);
         }
 
         if (badge > 0 && !editing) {
