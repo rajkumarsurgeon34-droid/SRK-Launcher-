@@ -158,7 +158,6 @@ public class LauncherActivity extends Activity implements AppIconView.Callbacks,
             }
         });
 
-        BadgeService.onChange = this::updateBadges;
 
         launcherApps = getSystemService(LauncherApps.class);
         laCallback = new LauncherApps.Callback() {
@@ -216,7 +215,6 @@ public class LauncherActivity extends Activity implements AppIconView.Callbacks,
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        BadgeService.onChange = null;
         try {
             launcherApps.unregisterCallback(laCallback);
         } catch (Exception ignored) {
@@ -476,7 +474,7 @@ public class LauncherActivity extends Activity implements AppIconView.Callbacks,
     }
 
     void updateBadges() {
-        for (AppIconView v : icons) v.setBadge(BadgeService.count(v.app.pkg));
+        // Notification badges removed: notification access gets sideloaded apps blocked by Play Protect.
     }
 
     // ------------------------------------------------------------------ pager callbacks
@@ -887,21 +885,6 @@ public class LauncherActivity extends Activity implements AppIconView.Callbacks,
         openIntent(new Intent(action));
     }
 
-    void openNotificationAccess() {
-        if (Build.VERSION.SDK_INT >= 30) {
-            Intent i = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
-                    .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
-                            new ComponentName(this, BadgeService.class).flattenToString());
-            try {
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(i);
-                return;
-            } catch (Exception ignored) {
-            }
-        }
-        openSettings(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
-    }
-
     void requestPerm(String perm, int code) {
         requestPermissions(new String[]{perm}, code);
     }
@@ -970,7 +953,6 @@ public class LauncherActivity extends Activity implements AppIconView.Callbacks,
         String[] items = {
                 "Set SRK Launcher as Home app",
                 "Change wallpaper",
-                "Notification badges & media controls",
                 "Brightness & rotation control",
                 "Do Not Disturb control",
                 "Weather (location)",
@@ -988,21 +970,18 @@ public class LauncherActivity extends Activity implements AppIconView.Callbacks,
                             openIntent(Intent.createChooser(new Intent(Intent.ACTION_SET_WALLPAPER), "Choose wallpaper"));
                             break;
                         case 2:
-                            openNotificationAccess();
-                            break;
-                        case 3:
                             askWriteSettings();
                             break;
-                        case 4:
+                        case 3:
                             openSettings(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
                             break;
-                        case 5:
+                        case 4:
                             requestPerm(Manifest.permission.ACCESS_COARSE_LOCATION, REQ_LOCATION);
                             break;
-                        case 6:
+                        case 5:
                             requestPerm(Manifest.permission.READ_CALENDAR, REQ_CALENDAR);
                             break;
-                        case 7:
+                        case 6:
                             new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                                     .setTitle("Reset Home Screen?")
                                     .setMessage("All apps go back to alphabetical order and the default Dock.")

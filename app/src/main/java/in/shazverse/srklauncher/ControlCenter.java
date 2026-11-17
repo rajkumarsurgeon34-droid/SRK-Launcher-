@@ -49,7 +49,6 @@ final class ControlCenter extends FrameLayout {
     private final ImageView playBtn;
     private MediaController controller;
     private MediaController.Callback mediaCb;
-    private boolean mediaAllowed;
     private float downX, downY;
 
     ControlCenter(LauncherActivity a) {
@@ -224,19 +223,18 @@ final class ControlCenter extends FrameLayout {
             act.openIntent(new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA));
         });
 
-        View.OnClickListener needAccess = v -> act.openNotificationAccess();
-        mediaTitle.setOnClickListener(v -> {
-            if (!mediaAllowed) act.openNotificationAccess();
-        });
         playBtn.setOnClickListener(v -> {
-            if (controller == null) {
-                if (!mediaAllowed) needAccess.onClick(v);
-                return;
-            }
-            PlaybackState ps = controller.getPlaybackState();
-            if (ps != null && ps.getState() == PlaybackState.STATE_PLAYING) controller.getTransportControls().pause();
-            else controller.getTransportControls().play();
+            mediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
+            postDelayed(this::bindMedia, 400);
         });
+    }
+
+    /** Sends a media key to whatever app is playing — needs no special permission. */
+    private void mediaKey(int code) {
+        AudioManager am = getContext().getSystemService(AudioManager.class);
+        if (am == null) return;
+        am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code));
+        am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code));
     }
 
     private static boolean isDndOn(NotificationManager nm) {
@@ -245,12 +243,8 @@ final class ControlCenter extends FrameLayout {
     }
 
     void bindMediaButtons(ImageView prev, ImageView next) {
-        prev.setOnClickListener(v -> {
-            if (controller != null) controller.getTransportControls().skipToPrevious();
-        });
-        next.setOnClickListener(v -> {
-            if (controller != null) controller.getTransportControls().skipToNext();
-        });
+        prev.setOnClickListener(v -> mediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS));
+        next.setOnClickListener(v -> mediaKey(android.view.KeyEvent.KEYCODE_MEDIA_NEXT));
     }
 
     void refresh() {
@@ -292,54 +286,10 @@ final class ControlCenter extends FrameLayout {
     }
 
     private void bindMedia() {
-        if (controller != null && mediaCb != null) controller.unregisterCallback(mediaCb);
-        controller = null;
-        try {
-            MediaSessionManager msm = getContext().getSystemService(MediaSessionManager.class);
-            List<MediaController> l = msm.getActiveSessions(new ComponentName(getContext(), BadgeService.class));
-            mediaAllowed = true;
-            if (l != null && !l.isEmpty()) controller = l.get(0);
-        } catch (Exception e) {
-            mediaAllowed = false;
-        }
-        if (controller == null) {
-            mediaTitle.setText("Not Playing");
-            mediaArtist.setText(mediaAllowed ? "" : "Tap to allow media controls");
-            playBtn.setImageDrawable(Ui.icon(getContext(), R.drawable.ic_play, 0x80FFFFFF));
-            return;
-        }
-        mediaCb = new MediaController.Callback() {
-            @Override
-            public void onPlaybackStateChanged(PlaybackState state) {
-                showMedia();
-            }
-
-            @Override
-            public void onMetadataChanged(MediaMetadata metadata) {
-                showMedia();
-            }
-        };
-        controller.registerCallback(mediaCb, new Handler(Looper.getMainLooper()));
-        showMedia();
-    }
-
-    private void showMedia() {
-        if (controller == null) return;
-        MediaMetadata md = controller.getMetadata();
-        String t = md != null ? md.getString(MediaMetadata.METADATA_KEY_TITLE) : null;
-        String ar = md != null ? md.getString(MediaMetadata.METADATA_KEY_ARTIST) : null;
-        if (t == null) {
-            try {
-                PackageManager pm = getContext().getPackageManager();
-                t = pm.getApplicationLabel(pm.getApplicationInfo(controller.getPackageName(), 0)).toString();
-            } catch (Exception e) {
-                t = "Playing";
-            }
-        }
-        mediaTitle.setText(t);
-        mediaArtist.setText(ar != null ? ar : "");
-        PlaybackState ps = controller.getPlaybackState();
-        boolean playing = ps != null && ps.getState() == PlaybackState.STATE_PLAYING;
+        AudioManager am = getContext().getSystemService(AudioManager.class);
+        boolean playing = am != null && am.isMusicActive();
+        mediaTitle.setText(playing ? "Playing" : "Not Playing");
+        mediaArtist.setText(playing ? "Music or video in another app" : "Controls your music app");
         playBtn.setImageDrawable(Ui.icon(getContext(), playing ? R.drawable.ic_pause : R.drawable.ic_play, Ui.WHITE));
     }
 
